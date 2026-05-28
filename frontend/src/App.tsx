@@ -58,13 +58,13 @@ import {
   getWeeklyHabitCompletionRate,
   toDateKey,
 } from './lib/insights'
-import { createId, loadAppData, saveAppData } from './lib/storage'
-import { createSeedAppData } from './data/seed'
+import { api } from './lib/api'
+import { useAuth } from './lib/AuthContext'
 import type {
-  AppData,
   EmotionLog,
   Habit,
   HabitFrequency,
+  HabitLog,
   ReminderChannel,
   ReminderFrequency,
   UserProfile,
@@ -171,15 +171,11 @@ function ProtectedRoute({
 }
 
 export default function App() {
-  const [appData, setAppData] = useState<AppData>(() => loadAppData())
+  const { user, login, register, logout } = useAuth()
+  const [emotionLogs, setEmotionLogs] = useState<EmotionLog[]>([])
+  const [habits, setHabits] = useState<Habit[]>([])
+  const [habitLogs, setHabitLogs] = useState<HabitLog[]>([])
   const [announcement, setAnnouncement] = useState<string | null>(null)
-
-  const currentUser =
-    appData.users.find((user) => user.id === appData.currentUserId) ?? null
-
-  useEffect(() => {
-    saveAppData(appData)
-  }, [appData])
 
   useEffect(() => {
     if (!announcement) {
@@ -193,332 +189,238 @@ export default function App() {
     return () => window.clearTimeout(timer)
   }, [announcement])
 
+  useEffect(() => {
+    if (!user) {
+      setEmotionLogs([])
+      setHabits([])
+      setHabitLogs([])
+      return
+    }
+
+    loadAllData()
+  }, [user])
+
+  async function loadAllData() {
+    try {
+      const [emotions, habitsList, logsList] = await Promise.all([
+        api.emotionLogs.list(),
+        api.habits.list(),
+        api.habitLogs.list(),
+      ])
+
+      setEmotionLogs(emotions)
+      setHabits(habitsList)
+      setHabitLogs(logsList)
+    } catch {
+      console.error('Error al cargar datos del servidor')
+    }
+  }
+
   function announce(message: string) {
     setAnnouncement(message)
   }
 
-  function registerUser(values: {
+  async function registerUser(values: {
     displayName: string
     email: string
     password: string
   }) {
-    const email = values.email.trim().toLowerCase()
-    const displayName = values.displayName.trim()
+    const error = await register(values)
 
-    if (!email || !displayName || values.password.length < 8) {
-      return 'Completa los datos y usa una contraseña de al menos 8 caracteres.'
+    if (error) {
+      return error
     }
 
-    if (appData.users.some((user) => user.email === email)) {
-      return 'Ese correo ya está registrado. Inicia sesión o usa recuperación.'
-    }
-
-    const nextUser: UserProfile = {
-      id: createId('user'),
-      email,
-      password: values.password,
-      displayName,
-      avatarTone: '#0f766e',
-      university: 'Corporación Universitaria Iberoamericana',
-      career: 'Estudiante',
-      reminderEnabled: true,
-      reminderTime: '20:00',
-      reminderFrequency: 'Diario',
-      reminderChannel: 'Push',
-      createdAt: toDateKey(),
-    }
-
-    setAppData((previous) => ({
-      ...previous,
-      users: [...previous.users, nextUser],
-      currentUserId: nextUser.id,
-    }))
     announce('Cuenta creada correctamente.')
+    await loadAllData()
     return null
   }
 
-  function loginUser(emailValue: string, password: string) {
-    const email = emailValue.trim().toLowerCase()
-    const user = appData.users.find(
-      (candidate) =>
-        candidate.email === email && candidate.password === password,
-    )
+  async function loginUser(emailValue: string, password: string) {
+    const error = await login(emailValue, password)
 
-    if (!user) {
-      return 'Credenciales inválidas. Verifica tu correo y tu contraseña.'
+    if (error) {
+      return error
     }
 
-    setAppData((previous) => ({
-      ...previous,
-      currentUserId: user.id,
-    }))
-    announce(`Bienvenida de nuevo, ${user.displayName}.`)
+    announce('Bienvenida de nuevo.')
+    await loadAllData()
     return null
   }
 
   function logoutUser() {
-    setAppData((previous) => ({
-      ...previous,
-      currentUserId: null,
-    }))
-    announce('Sesión cerrada.')
+    logout()
+    announce('Sesion cerrada.')
   }
 
-  function requestPasswordReset(emailValue: string) {
-    const email = emailValue.trim().toLowerCase()
-    const userExists = appData.users.some((user) => user.email === email)
-
-    if (!userExists) {
-      return 'No existe una cuenta con ese correo.'
+  async function requestPasswordReset(emailValue: string) {
+    try {
+      await api.auth.resetPassword(emailValue)
+      announce(`Se envio el enlace de recuperacion a ${emailValue}.`)
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Error al solicitar recuperacion'
     }
-
-    setAppData((previous) => ({
-      ...previous,
-      passwordResetRequests: [...previous.passwordResetRequests, email],
-    }))
-    announce(`Se envió el enlace de recuperación a ${email}.`)
-    return null
   }
 
-  function saveEmotion(values: { date: string; score: number; note: string }) {
-    if (!appData.currentUserId) {
-      return
-    }
-
-    setAppData((previous) => {
-      const currentUserId = previous.currentUserId
-      if (!currentUserId) {
-        return previous
-      }
-
-      const existing = previous.emotionLogs.find(
-        (log) => log.userId === currentUserId && log.date === values.date,
-      )
-
-      if (existing) {
-        return {
-          ...previous,
-          emotionLogs: previous.emotionLogs.map((log) =>
-            log.id === existing.id
-              ? { ...log, score: values.score, note: values.note.trim() }
-              : log,
-          ),
+  async function saveEmotion(values: { date: string; score: number; note: string }) {
+    try {
+      const log = await api.emotionLogs.save(values)
+      setEmotionLogs((previous) => {
+        const idx = previous.findIndex((e) => e.date === values.date && e.userId === user!.id)
+        if (idx >= 0) {
+          const updated = [...previous]
+          updated[idx] = log
+          return updated
         }
-      }
-
-      return {
-        ...previous,
-        emotionLogs: [
-          ...previous.emotionLogs,
-          {
-            id: createId('emo'),
-            userId: currentUserId,
-            date: values.date,
-            score: values.score,
-            note: values.note.trim(),
-          },
-        ],
-      }
-    })
-    announce('Check-in emocional guardado.')
+        return [...previous, log]
+      })
+      announce('Check-in emocional guardado.')
+    } catch {
+      announce('Error al guardar el check-in.')
+    }
   }
 
-  function deleteEmotion(logId: string) {
-    setAppData((previous) => ({
-      ...previous,
-      emotionLogs: previous.emotionLogs.filter((log) => log.id !== logId),
-    }))
-    announce('Registro emocional eliminado.')
+  async function deleteEmotion(logId: string) {
+    try {
+      await api.emotionLogs.delete(logId)
+      setEmotionLogs((previous) => previous.filter((log) => log.id !== logId))
+      announce('Registro emocional eliminado.')
+    } catch {
+      announce('Error al eliminar el registro.')
+    }
   }
 
-  function saveHabit(values: {
+  async function saveHabit(values: {
     id?: string
     title: string
     frequency: HabitFrequency
     cue: string
     color: string
   }) {
-    if (!appData.currentUserId) {
-      return 'No hay una sesión activa.'
+    if (!values.title.trim()) {
+      return 'El habito necesita un titulo corto y claro.'
     }
 
-    const title = values.title.trim()
-    if (!title) {
-      return 'El hábito necesita un título corto y claro.'
-    }
-
-    const payload: Habit = {
-      id: values.id ?? createId('habit'),
-      userId: appData.currentUserId,
-      title,
-      frequency: values.frequency,
-      cue: values.cue.trim(),
-      color: values.color,
-      isArchived: false,
-      createdAt: values.id
-        ? getUserHabits(appData.habits, appData.currentUserId).find(
-            (habit) => habit.id === values.id,
-          )?.createdAt ?? toDateKey()
-        : toDateKey(),
-    }
-
-    setAppData((previous) => ({
-      ...previous,
-      habits: values.id
-        ? previous.habits.map((habit) =>
-            habit.id === values.id ? payload : habit,
-          )
-        : [...previous.habits, payload],
-    }))
-    announce(values.id ? 'Hábito actualizado.' : 'Hábito creado.')
-    return null
-  }
-
-  function deleteHabit(habitId: string) {
-    setAppData((previous) => ({
-      ...previous,
-      habits: previous.habits.filter((habit) => habit.id !== habitId),
-      habitLogs: previous.habitLogs.filter((log) => log.habitId !== habitId),
-    }))
-    announce('Hábito eliminado.')
-  }
-
-  function toggleHabit(habitId: string, date = toDateKey()) {
-    if (!appData.currentUserId) {
-      return
-    }
-
-    setAppData((previous) => {
-      const currentUserId = previous.currentUserId
-      if (!currentUserId) {
-        return previous
+    try {
+      if (values.id) {
+        const habit = await api.habits.update(values.id, {
+          title: values.title.trim(),
+          frequency: values.frequency,
+          cue: values.cue.trim(),
+          color: values.color,
+        })
+        setHabits((previous) =>
+          previous.map((h) => (h.id === values.id ? habit : h)),
+        )
+        announce('Habito actualizado.')
+      } else {
+        const habit = await api.habits.create({
+          title: values.title.trim(),
+          frequency: values.frequency,
+          cue: values.cue.trim(),
+          color: values.color,
+        })
+        setHabits((previous) => [...previous, habit])
+        announce('Habito creado.')
       }
 
-      const existing = previous.habitLogs.find(
-        (log) =>
-          log.userId === currentUserId &&
-          log.habitId === habitId &&
-          log.date === date,
+      return null
+    } catch {
+      return 'Error al guardar el habito.'
+    }
+  }
+
+  async function deleteHabit(habitId: string) {
+    try {
+      await api.habits.delete(habitId)
+      setHabits((previous) => previous.filter((habit) => habit.id !== habitId))
+      setHabitLogs((previous) => previous.filter((log) => log.habitId !== habitId))
+      announce('Habito eliminado.')
+    } catch {
+      announce('Error al eliminar el habito.')
+    }
+  }
+
+  async function toggleHabit(habitId: string, date = toDateKey()) {
+    try {
+      const existing = habitLogs.find(
+        (log) => log.habitId === habitId && log.date === date,
       )
 
-      if (existing) {
-        return {
-          ...previous,
-          habitLogs: previous.habitLogs.map((log) =>
-            log.id === existing.id ? { ...log, completed: !log.completed } : log,
-          ),
-        }
-      }
+      const log = await api.habitLogs.toggle({
+        habitId,
+        date,
+        completed: existing ? !existing.completed : true,
+      })
 
-      return {
-        ...previous,
-        habitLogs: [
-          ...previous.habitLogs,
-          {
-            id: createId('habit-log'),
-            habitId,
-            userId: currentUserId,
-            date,
-            completed: true,
-          },
-        ],
-      }
-    })
-    announce('Seguimiento de hábito actualizado.')
+      setHabitLogs((previous) => {
+        const idx = previous.findIndex((l) => l.habitId === habitId && l.date === date)
+        if (idx >= 0) {
+          const updated = [...previous]
+          updated[idx] = log
+          return updated
+        }
+        return [...previous, log]
+      })
+      announce('Seguimiento de habito actualizado.')
+    } catch {
+      announce('Error al actualizar el seguimiento.')
+    }
   }
 
-  function saveProfile(values: {
+  async function saveProfile(values: {
     displayName: string
     university: string
     career: string
     avatarTone: string
   }) {
-    if (!appData.currentUserId) {
-      return
+    try {
+      await api.profile.update(values)
+      announce('Perfil actualizado.')
+    } catch {
+      announce('Error al guardar el perfil.')
     }
-
-    setAppData((previous) => ({
-      ...previous,
-      users: previous.users.map((user) =>
-        user.id === previous.currentUserId
-          ? {
-              ...user,
-              displayName: values.displayName.trim(),
-              university: values.university.trim(),
-              career: values.career.trim(),
-              avatarTone: values.avatarTone,
-            }
-          : user,
-      ),
-    }))
-    announce('Perfil actualizado.')
   }
 
-  function saveReminder(values: {
+  async function saveReminder(values: {
     reminderEnabled: boolean
     reminderTime: string
     reminderFrequency: ReminderFrequency
     reminderChannel: ReminderChannel
   }) {
-    if (!appData.currentUserId) {
-      return
+    try {
+      await api.profile.updateReminders(values)
+      announce('Recordatorios guardados.')
+    } catch {
+      announce('Error al guardar recordatorios.')
     }
-
-    setAppData((previous) => ({
-      ...previous,
-      users: previous.users.map((user) =>
-        user.id === previous.currentUserId
-          ? {
-              ...user,
-              reminderEnabled: values.reminderEnabled,
-              reminderTime: values.reminderTime,
-              reminderFrequency: values.reminderFrequency,
-              reminderChannel: values.reminderChannel,
-            }
-          : user,
-      ),
-    }))
-    announce('Recordatorios guardados.')
   }
 
-  function dismissRiskAlert() {
-    if (!appData.currentUserId) {
-      return
+  async function dismissRiskAlert() {
+    try {
+      await api.profile.dismissAlert()
+      announce('Alerta pospuesta durante 48 horas.')
+    } catch {
+      announce('Error al posponer la alerta.')
     }
-
-    const until = new Date()
-    until.setDate(until.getDate() + 2)
-
-    setAppData((previous) => ({
-      ...previous,
-      users: previous.users.map((user) =>
-        user.id === previous.currentUserId
-          ? {
-              ...user,
-              riskAlertDismissedUntil: toDateKey(until),
-            }
-          : user,
-      ),
-    }))
-    announce('Alerta pospuesta durante 48 horas.')
   }
 
   function resetPrototype() {
-    setAppData(createSeedAppData())
-    announce('Los datos se restablecieron correctamente.')
+    announce('Funcion no disponible con el backend conectado.')
   }
 
   return (
     <Routes>
       <Route
         path="/"
-        element={<LandingPage currentUser={currentUser} />}
+        element={<LandingPage currentUser={user} />}
       />
       <Route
         path="/auth"
         element={
           <AuthPage
-            currentUser={currentUser}
+            currentUser={user}
             onLogin={loginUser}
             onRegister={registerUser}
             onPasswordReset={requestPasswordReset}
@@ -528,13 +430,13 @@ export default function App() {
       <Route
         path="/app/*"
         element={
-          <ProtectedRoute user={currentUser}>
+          <ProtectedRoute user={user}>
             <Workspace
               announcement={announcement}
-              currentUser={currentUser!}
-              emotionLogs={appData.emotionLogs}
-              habitLogs={appData.habitLogs}
-              habits={appData.habits}
+              currentUser={user!}
+              emotionLogs={emotionLogs}
+              habitLogs={habitLogs}
+              habits={habits}
               onDeleteEmotion={deleteEmotion}
               onDeleteHabit={deleteHabit}
               onDismissRiskAlert={dismissRiskAlert}
@@ -551,7 +453,7 @@ export default function App() {
       />
       <Route
         path="*"
-        element={<Navigate to={currentUser ? '/app' : '/'} replace />}
+        element={<Navigate to={user ? '/app' : '/'} replace />}
       />
     </Routes>
   )
@@ -609,13 +511,13 @@ function AuthPage({
   onPasswordReset,
 }: {
   currentUser: UserProfile | null
-  onLogin: (email: string, password: string) => string | null
+  onLogin: (email: string, password: string) => Promise<string | null>
   onRegister: (values: {
     displayName: string
     email: string
     password: string
-  }) => string | null
-  onPasswordReset: (email: string) => string | null
+  }) => Promise<string | null>
+  onPasswordReset: (email: string) => Promise<string | null>
 }) {
   const navigate = useNavigate()
   const [mode, setMode] = useState<'login' | 'register' | 'recover'>('login')
@@ -635,27 +537,27 @@ function AuthPage({
     return <Navigate to="/app" replace />
   }
 
-  function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const error = onLogin(loginForm.email, loginForm.password)
+    const error = await onLogin(loginForm.email, loginForm.password)
     setMessage(error ?? 'Ingreso correcto. Redirigiendo al dashboard...')
     if (!error) {
       navigate('/app')
     }
   }
 
-  function handleRegisterSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleRegisterSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const error = onRegister(registerForm)
+    const error = await onRegister(registerForm)
     setMessage(error ?? 'Cuenta creada correctamente.')
     if (!error) {
       navigate('/app')
     }
   }
 
-  function handleRecoverySubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleRecoverySubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const error = onPasswordReset(recoverEmail)
+    const error = await onPasswordReset(recoverEmail)
     setMessage(error ?? 'Si el correo existe, recibirás un enlace de recuperación.')
   }
 
@@ -822,7 +724,7 @@ function Workspace({
   currentUser: UserProfile
   emotionLogs: EmotionLog[]
   habits: Habit[]
-  habitLogs: AppData['habitLogs']
+  habitLogs: HabitLog[]
   onDeleteEmotion: (logId: string) => void
   onDeleteHabit: (habitId: string) => void
   onDismissRiskAlert: () => void
@@ -835,7 +737,7 @@ function Workspace({
     frequency: HabitFrequency
     cue: string
     color: string
-  }) => string | null
+  }) => Promise<string | null>
   onSaveProfile: (values: {
     displayName: string
     university: string
@@ -1264,7 +1166,7 @@ function HabitsPage({
     frequency: HabitFrequency
     cue: string
     color: string
-  }) => string | null
+  }) => Promise<string | null>
   onToggleHabit: (habitId: string, date?: string) => void
   todayHabits: Array<Habit & { completed: boolean }>
 }) {
@@ -1296,9 +1198,9 @@ function HabitsPage({
     })
   }, [editingHabit])
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const error = onSaveHabit({
+    const error = await onSaveHabit({
       id: editingHabit?.id,
       ...form,
     })
@@ -1495,7 +1397,7 @@ function HistoryPage({
 }: {
   currentHabits: Habit[]
   currentLogs: EmotionLog[]
-  habitLogs: AppData['habitLogs']
+  habitLogs: HabitLog[]
   onDeleteEmotion: (logId: string) => void
   onSaveEmotion: (values: { date: string; score: number; note: string }) => void
   onToggleHabit: (habitId: string, date?: string) => void
@@ -1529,7 +1431,7 @@ function HistoryPage({
     }
 
     setEditScore(editingLog.score)
-    setEditNote(editingLog.note)
+    setEditNote(editingLog.note ?? '')
   }, [editingLog])
 
   function handleDelete(logId: string) {

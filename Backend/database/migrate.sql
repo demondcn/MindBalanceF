@@ -1,0 +1,38 @@
+ALTER TABLE app_users
+  ADD COLUMN IF NOT EXISTS avatar_tone VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS university VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS career VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS reminder_time VARCHAR(5),
+  ADD COLUMN IF NOT EXISTS reminder_frequency VARCHAR(40),
+  ADD COLUMN IF NOT EXISTS reminder_channel VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS risk_alert_dismissed_until DATE;
+
+ALTER TABLE emotion_logs
+  ALTER COLUMN date TYPE DATE USING date::DATE,
+  ALTER COLUMN date SET DEFAULT CURRENT_DATE,
+  DROP CONSTRAINT IF EXISTS emotion_logs_user_date_unique,
+  ADD CONSTRAINT emotion_logs_user_date_unique UNIQUE (user_id, date);
+
+ALTER TABLE habits
+  ADD COLUMN IF NOT EXISTS cue VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS color VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE habit_logs
+  ADD COLUMN IF NOT EXISTS date DATE NOT NULL DEFAULT CURRENT_DATE,
+  DROP CONSTRAINT IF EXISTS habit_logs_habit_date_unique,
+  ADD CONSTRAINT habit_logs_habit_date_unique UNIQUE (habit_id, date);
+
+ALTER TABLE recommendations
+  ADD COLUMN IF NOT EXISTS title VARCHAR(160) NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS action TEXT;
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  token VARCHAR(255) NOT NULL UNIQUE,
+  expires_at TIMESTAMP NOT NULL,
+  used BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP NOT NULL DEFAULT now()
+);
