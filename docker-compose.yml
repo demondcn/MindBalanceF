@@ -4,6 +4,7 @@ services:
       context: ./Backend
       dockerfile: Dockerfile
     working_dir: /app
+    command: npm run dev
     environment:
       PORT: ${BACKEND_PORT}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -18,14 +19,21 @@ services:
       - postgres
 
   frontend:
-    image: node:22-alpine
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     working_dir: /app
-    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    command: npm run dev -- --host 0.0.0.0
+    environment:
+      VITE_API_BASE_URL: /api
+      VITE_DEV_API_PROXY_TARGET: http://backend:${BACKEND_PORT}
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
 
   postgres:
     image: postgres:16-alpine

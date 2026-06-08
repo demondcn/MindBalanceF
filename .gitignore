@@ -3,3 +3,6 @@ node_modules/
 .tmp_*
 frontend/node_modules/
 Backend/node_modules/
+coverage/
+playwright-report/
+test-results/

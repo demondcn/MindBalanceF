@@ -1,6 +1,32 @@
 import type { EmotionLog, Habit, HabitLog, UserProfile } from '../types'
 
-const API_BASE = '/api'
+const DEFAULT_API_BASE = '/api'
+
+function isLocalHostname(hostname: string) {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+}
+
+function normalizeApiBase(value: string | undefined) {
+  const trimmedValue = String(value ?? '').trim()
+
+  if (!trimmedValue) {
+    return DEFAULT_API_BASE
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedValue)
+
+    if (typeof window !== 'undefined' && isLocalHostname(parsedUrl.hostname) && !isLocalHostname(window.location.hostname)) {
+      return DEFAULT_API_BASE
+    }
+  } catch {
+    // Mantiene rutas relativas como /api.
+  }
+
+  return trimmedValue.replace(/\/+$/, '')
+}
+
+const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE_URL)
 
 function getToken(): string | null {
   return localStorage.getItem('mindbalance-token')
@@ -28,8 +54,18 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Error del servidor' }))
-    throw new Error(error.message || `HTTP ${response.status}`)
+    const contentType = response.headers.get('content-type') ?? ''
+
+    if (contentType.includes('application/json')) {
+      const error = await response.json().catch(() => ({ message: 'Error del servidor' }))
+      throw new Error(error.message || `HTTP ${response.status}`)
+    }
+
+    if (response.status === 404) {
+      throw new Error('Servicio no disponible. Verifica la URL del backend o su despliegue.')
+    }
+
+    throw new Error(`HTTP ${response.status}`)
   }
 
   return response.json()

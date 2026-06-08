@@ -256,7 +256,7 @@ export default function App() {
   async function requestPasswordReset(emailValue: string) {
     try {
       await api.auth.resetPassword(emailValue)
-      announce(`Se envio el enlace de recuperacion a ${emailValue}.`)
+      announce(`Registramos la solicitud de recuperacion para ${emailValue}.`)
       return null
     } catch (error) {
       return error instanceof Error ? error.message : 'Error al solicitar recuperacion'
@@ -558,7 +558,7 @@ function AuthPage({
   async function handleRecoverySubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const error = await onPasswordReset(recoverEmail)
-    setMessage(error ?? 'Si el correo existe, recibirás un enlace de recuperación.')
+    setMessage(error ?? 'Si el correo existe, registramos la solicitud de recuperacion.')
   }
 
   return (
@@ -692,7 +692,7 @@ function AuthPage({
               />
             </label>
             <button className="button button--primary" type="submit">
-              Enviar enlace
+              Solicitar recuperacion
             </button>
           </form>
         ) : null}
