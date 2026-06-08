@@ -22,16 +22,19 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: npm
 
+      - name: Clean npm cache
+        run: npm cache clean --force
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci --include=optional || npm install --include=optional
 
       - name: Lint if present
         run: npm run lint --if-present
 
-      - name: Build frontend
+      - name: Build
         run: npm run build
 
       - name: Run unit and integration tests
@@ -41,7 +44,7 @@ jobs:
         run: npm run test:coverage
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps
 
       - name: Run E2E tests
         run: npm run test:e2e

@@ -1,6 +1,9 @@
 {
   "name": "mindbalancef",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "workspaces": [
     "frontend",
     "Backend"
