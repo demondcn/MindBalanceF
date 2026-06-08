@@ -163,6 +163,16 @@ describe('API integration', () => {
     expect(recommendationResponse.body.recommendations).toHaveLength(1)
   })
 
+  it('expone el endpoint de diagnostico de salud', async () => {
+    const response = await request(app).get('/api/health')
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual({
+      ok: true,
+      service: 'MindBalance API',
+    })
+  })
+
   it('expone Swagger UI y el documento OpenAPI', async () => {
     const docsResponse = await request(app).get('/api-docs/')
     const openApiResponse = await request(app).get('/openapi.json')

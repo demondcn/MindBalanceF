@@ -10,6 +10,10 @@
     {
       "source": "/openapi.json",
       "destination": "/api/openapi.json"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/router?path=:path*"
     }
   ]
 }

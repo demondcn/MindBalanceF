@@ -1,6 +1,6 @@
 export function getHealth(request, response) {
   response.json({
-    status: 'ok',
-    app: 'MindBalance API',
+    ok: true,
+    service: 'MindBalance API',
   })
 }
