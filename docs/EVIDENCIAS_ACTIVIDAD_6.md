@@ -6,6 +6,7 @@ Captura o adjunta evidencia de los siguientes puntos:
 
 - URL del repositorio GitHub: `https://github.com/demondcn/MindBalanceF`
 - URL del despliegue en Vercel: `https://mind-balance-f.vercel.app`
+- URL del backend en Render: `https://mindbalance-backend-n8bh.onrender.com`
 - URL de la Wiki del repositorio
 - URL o captura del tablero Scrum
 
@@ -16,8 +17,10 @@ Captura o adjunta evidencia de los siguientes puntos:
 - `Backend/Dockerfile`
 - `frontend/Dockerfile`
 - `frontend/vercel.json`
+- evidencia de `VITE_API_BASE_URL=/api` configurado en Vercel
 - Swagger UI en `/api-docs`
 - OpenAPI JSON en `/openapi.json`
+- Health por proxy en `/api/health`
 
 ## Automatizacion y calidad
 
@@ -47,6 +50,8 @@ Captura o adjunta evidencia de los siguientes puntos:
 
 - Captura de `http://localhost:3000/api-docs`
 - Captura de `https://mind-balance-f.vercel.app/api-docs`
+- Captura de `https://mindbalance-backend-n8bh.onrender.com/api-docs`
+- Captura de `https://mind-balance-f.vercel.app/api/health`
 - Evidencia de inicializacion de base de datos con `Backend/database/init.sql`
 
 ## Archivos que deben quedar versionados

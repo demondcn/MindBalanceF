@@ -23,7 +23,7 @@ function ensureApiPath(pathname) {
 }
 
 function getRewrittenPath(request) {
-  const pathFromQuery = request?.query?.path
+  const pathFromQuery = request?.query?.path ?? request?.query?.target
 
   if (Array.isArray(pathFromQuery)) {
     return pathFromQuery.join('/')
@@ -33,7 +33,8 @@ function getRewrittenPath(request) {
     return pathFromQuery
   }
 
-  return buildUrl(request?.url).searchParams.get('path') ?? ''
+  const requestUrl = buildUrl(request?.url)
+  return requestUrl.searchParams.get('path') ?? requestUrl.searchParams.get('target') ?? ''
 }
 
 function buildSearchString(request, keysToRemove = []) {

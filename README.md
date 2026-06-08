@@ -18,20 +18,20 @@ MindBalance es una plataforma web para bienestar emocional y seguimiento de habi
 - CI/CD: GitHub Actions
 - Documentacion API: Swagger UI + swagger-jsdoc
 - Contenedores: Docker, Docker Compose
-- Despliegue: Vercel
+- Despliegue: Vercel + Render
 
 ## Arquitectura general
 
 El repositorio esta dividido en dos aplicaciones principales:
 
-- `frontend/`: interfaz React/Vite y runtime serverless para Vercel bajo `frontend/api`
+- `frontend/`: interfaz React/Vite desplegada en Vercel y consumiendo la API por rutas `/api`
 - `Backend/`: backend Express canónico para desarrollo local, Docker y documentacion
 - `Documentacion/`: entregables academicos previos
 - `docs/`: evidencias y soporte tecnico adicional
 
-### Flujo de despliegue en Vercel
+### Flujo de despliegue en produccion
 
-El proyecto se despliega como un solo proyecto de Vercel con Root Directory `frontend`. Para soportar este escenario, la API Express usada en produccion vive en `frontend/api/_lib` y es consumida por el handler serverless `frontend/api/[...path].js`.
+El proyecto se despliega con frontend en Vercel y backend en Render. El Root Directory de Vercel sigue siendo `frontend`, y en produccion las rutas `/api`, `/api-docs` y `/openapi.json` se reescriben desde [`frontend/vercel.json`](./frontend/vercel.json) hacia `https://mindbalance-backend-n8bh.onrender.com`.
 
 ## Estructura resumida
 
@@ -84,8 +84,12 @@ POSTGRES_PASSWORD=your_password_here
 POSTGRES_PORT=5432
 BACKEND_PORT=3000
 DATABASE_URL=postgres://mindbalance_user:your_password_here@localhost:5432/mindbalance
+POSTGRES_URL=
 JWT_SECRET=your_jwt_secret_here
 JWT_EXPIRES_IN=1d
+FRONTEND_URL=https://mind-balance-f.vercel.app
+CORS_ORIGIN=http://localhost:5173,https://mind-balance-f.vercel.app
+CORS_ORIGINS=http://localhost:5173,https://mind-balance-f.vercel.app
 VITE_API_BASE_URL=/api
 VITE_DEV_API_PROXY_TARGET=http://localhost:3000
 ```
@@ -95,6 +99,12 @@ Variables utiles en `frontend/.env.example`:
 ```env
 VITE_API_BASE_URL=/api
 ```
+
+Resumen por plataforma:
+
+- Vercel: `VITE_API_BASE_URL=/api`
+- Render: `DATABASE_URL` o `POSTGRES_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `NODE_ENV=production`
+- Render para CORS: `FRONTEND_URL=https://mind-balance-f.vercel.app` y/o `CORS_ORIGIN=http://localhost:5173,https://mind-balance-f.vercel.app`
 
 ## Base de datos
 
@@ -191,6 +201,7 @@ Rutas esperadas:
 
 - local backend: `http://localhost:3000/api-docs`
 - Vercel: `https://mind-balance-f.vercel.app/api-docs`
+- Render: `https://mindbalance-backend-n8bh.onrender.com/api-docs`
 
 ## Docker
 
@@ -238,16 +249,18 @@ El pipeline corre en `push` a `main` y en `pull_request`, e incluye:
 - `npx playwright install --with-deps chromium`
 - `npm run test:e2e`
 
-## Despliegue en Vercel
+## Despliegue en Vercel y Render
 
 Configuracion recomendada:
 
 - un solo proyecto de Vercel
 - Root Directory: `frontend`
-- variables: `DATABASE_URL` o `POSTGRES_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`
-- `VITE_API_BASE_URL=/api`
+- variable en Vercel: `VITE_API_BASE_URL=/api`
+- backend en Render: `https://mindbalance-backend-n8bh.onrender.com`
+- variables en Render: `DATABASE_URL` o `POSTGRES_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `NODE_ENV=production`
+- variables de CORS en Render: `FRONTEND_URL=https://mind-balance-f.vercel.app` y/o `CORS_ORIGIN=http://localhost:5173,https://mind-balance-f.vercel.app`
 
-La ruta `/api-docs` en Vercel se resuelve mediante [`frontend/vercel.json`](./frontend/vercel.json), que reescribe hacia la API serverless del mismo proyecto.
+Las rutas `/api`, `/api-docs` y `/openapi.json` en Vercel se resuelven mediante [`frontend/vercel.json`](./frontend/vercel.json), que hace rewrites externos directos hacia Render sin exponer `DATABASE_URL` ni `JWT_SECRET` al navegador.
 
 ## Evidencias academicas
 
@@ -260,4 +273,4 @@ La guia de evidencias a capturar esta en:
 - no se usan datos sensibles reales
 - la recuperacion de contrasena registra la solicitud, pero no envia correo real aun
 - el backend canónico esta en `Backend/src`
-- el runtime de produccion en Vercel usa la copia dentro de `frontend/api/_lib`
+- la URL de Render queda configurada en [`frontend/vercel.json`](./frontend/vercel.json), no en el codigo cliente

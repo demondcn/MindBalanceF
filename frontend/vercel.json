@@ -5,15 +5,15 @@
   "rewrites": [
     {
       "source": "/api-docs",
-      "destination": "/api/docs"
+      "destination": "https://mindbalance-backend-n8bh.onrender.com/api-docs"
     },
     {
       "source": "/openapi.json",
-      "destination": "/api/openapi.json"
+      "destination": "https://mindbalance-backend-n8bh.onrender.com/openapi.json"
     },
     {
       "source": "/api/:path*",
-      "destination": "/api/router?path=:path*"
+      "destination": "https://mindbalance-backend-n8bh.onrender.com/api/:path*"
     }
   ]
 }
